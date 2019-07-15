@@ -24,6 +24,7 @@ namespace NewGaitAnalysis
                 Console.WriteLine(folderName);
 
                 JointsList jointsList = new JointsList();
+                
 
                 string file1 = input + @"\localkinect-data.txt";
                 string file2 = input + @"\netkinect-data.txt";
@@ -48,7 +49,10 @@ namespace NewGaitAnalysis
                 }
 
                 GaitAnalysis gait = new GaitAnalysis(jointsList);
-                WriteCSV(gait.FootDistances, filename: folderName);
+                WriteCSV(gait.FootDistances, filename: folderName + "-ankledists");
+                WriteCSV(gait.SpineBasePositions, filename: folderName + "-spinepos");
+                WriteCSV(gait.leftAnkledistancesFromPlane, filename: folderName + "-leftdist");
+                WriteCSV(gait.rightAnkledistancesFromPlane, filename: folderName + "-rightdist");
             }
         }
 
@@ -76,7 +80,24 @@ namespace NewGaitAnalysis
             int i = 0;
             foreach (float value in values)
             {
-                lines.Add(String.Format("{0},{1}", i, (value*100).ToString().Replace(',', '.')));
+                lines.Add(String.Format("{0}", (value).ToString().Replace(',', '.')));
+                i += 1;
+            }
+
+            File.WriteAllLines(filename + ".csv", lines);
+        }
+
+        static void WriteCSV(List<CameraSpacePoint> values, string filename = "output")
+        {
+            List<string> lines = new List<string>();
+            int i = 0;
+            foreach (CameraSpacePoint value in values)
+            {
+                CameraSpacePoint pos = LinearAlgebra.Scale(value, 1);
+                string x = pos.X.ToString().Replace(',', '.');
+                string y = pos.Y.ToString().Replace(',', '.');
+                string z = pos.Z.ToString().Replace(',', '.');
+                lines.Add(String.Format("{0},{1},{2}", x,y,z));
                 i += 1;
             }
 

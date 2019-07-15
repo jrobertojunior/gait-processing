@@ -10,202 +10,108 @@ namespace NewGaitAnalysis
 {
     using JointsList = List<Dictionary<JointType, Joint>>;
 
-    public enum FootPhase
-    {
-        Swing = 0,
-        Stance
-    }
-
     class GaitAnalysis
     {
-        public int Cycles { get; private set; }
-
         private Dictionary<JointType, Joint> prevJoints;
-
-        public Foot LeftFoot;
-        public Foot RightFoot;
 
         public List<Dictionary<JointType, Joint>> JointsList;
 
         public List<float> FootDistances { get; private set; }
+        public List<CameraSpacePoint> SpineBasePositions { get; private set; }
 
-        public GaitAnalysis()
-        {
-            LeftFoot = new Foot();
-            RightFoot = new Foot();
-        }
+        public List<float> leftAnkledistancesFromPlane { get; private set; }
+        public List<float> rightAnkledistancesFromPlane { get; private set; }
 
         public GaitAnalysis(List<Dictionary<JointType, Joint>> jointsList)
         {
             JointsList = jointsList;
-
+            GetSpineCenterPositions(jointsList);
             Analyze(jointsList);
         }
 
         public void Analyze(JointsList jointsList)
         {
-            FootDistances = new List<float>();
-            float maxValue = 0.0f;
+            FootDistances = GetAnkleDistancesFromEachOther(jointsList);
+            SpineBasePositions = GetSpineCenterPositions(jointsList);
 
-            foreach (var joint in jointsList)
+            leftAnkledistancesFromPlane = new List<float>();
+            rightAnkledistancesFromPlane = new List<float>();
+            foreach (Dictionary<JointType, Joint> joints in jointsList)
             {
-                CameraSpacePoint leftAnkle = joint[JointType.AnkleLeft].Position;
-                CameraSpacePoint rightAnkle = joint[JointType.AnkleRight].Position;
+                Planes planes = GetPlanes(joints);
+
+                float distLeft = GetDistanceFromPlane(joints[JointType.AnkleLeft].Position, joints[JointType.SpineBase].Position, planes.FrontalPlane);
+                float distRight = GetDistanceFromPlane(joints[JointType.AnkleRight].Position, joints[JointType.SpineBase].Position, planes.FrontalPlane);
+                leftAnkledistancesFromPlane.Add(distLeft);
+                rightAnkledistancesFromPlane.Add(distRight);
+            }
+        }
+
+        private List<float> GetAnkleDistancesFromEachOther(JointsList jointsList)
+        {
+            var footDistances = new List<float>();
+
+            foreach (var joints in jointsList)
+            {
+                CameraSpacePoint leftAnkle = joints[JointType.AnkleLeft].Position;
+                CameraSpacePoint rightAnkle = joints[JointType.AnkleRight].Position;
 
                 float footDist = LinearAlgebra.DistanceBetweenTwoPoints(leftAnkle, rightAnkle);
 
-                if (footDist > maxValue)
-                {
-                    maxValue = footDist;
-                }
-
-                FootDistances.Add(footDist);
+                footDistances.Add(footDist);
             }
 
-            //Console.WriteLine("Max foot distance: " + maxValue);
+            return footDistances;
         }
 
-        public void Update(Dictionary<JointType, Joint> joints)
+        public List<CameraSpacePoint> GetSpineCenterPositions(JointsList jointsList)
         {
-            int trackedJoints = 0;
-            foreach (JointType jointType in joints.Keys)
+            var spineBasePositions = new List<CameraSpacePoint>();
+
+            foreach (var joints in jointsList)
             {
-                if (joints[jointType].TrackingState == TrackingState.Tracked || joints[jointType].TrackingState == TrackingState.Inferred)
-                {
-                    trackedJoints += 1;
-                }
+                CameraSpacePoint pos = joints[JointType.SpineBase].Position;
+                //Console.WriteLine(String.Format("{0} {1} {2}", pos.X, pos.Y, pos.Z));
+                spineBasePositions.Add(pos);
             }
-            //Console.WriteLine(Enum.GetNames(typeof(JointType)).Length);
-            float confidence = trackedJoints / Enum.GetNames(typeof(JointType)).Length; // ratio of tracked-joints and total-joints
-            confidence = 1;
-            if (confidence > 0.8)
-            {
-                LeftFoot.Update(joints[JointType.FootLeft].Position);
-            }
+            return spineBasePositions;
+        }
+
+        public static float GetDistanceFromPlane(CameraSpacePoint point, CameraSpacePoint planePos, CameraSpacePoint normal)
+        {
+            float dist = LinearAlgebra.DotProduct(normal, (LinearAlgebra.Sub(point, planePos)));
+            return dist;
+        }
+
+
+        public static Planes GetPlanes(Dictionary<JointType, Joint> joints)
+        {
+            CameraSpacePoint spineBase = joints[JointType.SpineBase].Position;
+            CameraSpacePoint spineMid = joints[JointType.SpineMid].Position;
+
+            CameraSpacePoint horizontalPlane =LinearAlgebra.Normalize(LinearAlgebra.Sub(spineMid, spineBase));
+            CameraSpacePoint hipToHip = LinearAlgebra.Normalize( LinearAlgebra.Sub(joints[JointType.HipLeft].Position, joints[JointType.HipRight].Position)); // difference between both hips
+            CameraSpacePoint sagittalPlane = LinearAlgebra.Normalize(LinearAlgebra.CrossProduct(horizontalPlane, hipToHip));
+            CameraSpacePoint frontalPlane = LinearAlgebra.Normalize(LinearAlgebra.CrossProduct(horizontalPlane, sagittalPlane));
+
+
+            Planes planes = new Planes(horizontalPlane, sagittalPlane, frontalPlane);
+
+            return planes;
         }
     }
 
-    class Foot
+    public struct Planes
     {
-        public FootPhase Phase { get; private set; }
-        public float Velocity { get; private set; }
-        public float Acceleration { get; private set; }
+        public CameraSpacePoint HorizontalPlane;
+        public CameraSpacePoint SagittalPlane;
+        public CameraSpacePoint FrontalPlane;
 
-        private CameraSpacePoint previousPosition;
-        private CameraSpacePoint Position;
-        private float previousVelocity;
-        private float previousAcceleration;
-
-        private List<float> VelocityHistory;
-        private List<float> AccelerationHistory;
-
-        private int historyLen;
-        private float phaseThreshold;
-
-        public Foot()
+        public Planes(CameraSpacePoint horizontalPlane, CameraSpacePoint sagittalPlane, CameraSpacePoint frontalPlane)
         {
-            historyLen = 5;
-            phaseThreshold = 0.15f;
-
-            Phase = FootPhase.Stance;
-
-            Position = new CameraSpacePoint
-            {
-                X = 0,
-                Y = 0,
-                Z = 0
-            };
-            Velocity = 0.0f;
-            Acceleration = 0.0f;
-
-            VelocityHistory = new List<float>();
-            AccelerationHistory = new List<float>();
-        }
-
-        public void Update(CameraSpacePoint position)
-        {
-            // Update call stack:
-            // Update(position) >> UpdateVelocity >> UpdateAcceleration >> UpdatePhase
-
-            previousPosition = Position; // update previous value
-            Position = position; // update current value
-
-            if (!IsZero(previousPosition))
-            {
-                UpdateVelocity(Position, previousPosition);
-            }
-        }
-
-        private void UpdateVelocity(CameraSpacePoint currentPos, CameraSpacePoint previousPos)
-        {
-            previousVelocity = Velocity; // update previous value
-
-            float v = LinearAlgebra.DistanceBetweenTwoPoints(currentPos, previousPos); // update current value
-
-            if (v < 0.6)
-            {
-                Velocity = v;
-            }
-
-
-            AddValue(Velocity, VelocityHistory); // update history
-
-            if (previousVelocity != 0.0f)
-            {
-                UpdateAcceleration(Velocity, previousVelocity);
-
-                //UpdatePhase(Velocity);
-            }
-        }
-
-        private void UpdateAcceleration(float currentVel, float previousVel)
-        {
-            previousAcceleration = Acceleration; // update previous value
-            Acceleration = currentVel - previousVel; // update current value
-
-            AccelerationHistory = AddValue(Acceleration, AccelerationHistory); // update history
-
-            //UpdatePhase(Acceleration);
-        }
-
-        private void UpdatePhase(float currentAccel)
-        {
-            if (currentAccel > phaseThreshold)
-            {
-                Phase = FootPhase.Swing;
-            }
-            else
-            {
-                Phase = FootPhase.Stance;
-            }
-
-            Console.WriteLine(Phase);
-        }
-
-        private List<float> AddValue(float value, List<float> list)
-        {
-            if (list.Capacity < historyLen)
-            {
-                list.Add(value);
-            }
-            else
-            {
-                for (int i = 0; i < historyLen - 1; i++)
-                {
-                    list[i] = list[i + 1];
-                }
-
-                list[historyLen - 1] = value;
-            }
-
-            return list;
-        }
-
-        private bool IsZero(CameraSpacePoint pos)
-        {
-            if (pos.X == 0 && pos.Y == 0 && pos.Z == 0) return true;
-
-            return false;
+            HorizontalPlane = horizontalPlane;
+            SagittalPlane = sagittalPlane;
+            FrontalPlane = frontalPlane;
         }
     }
 }

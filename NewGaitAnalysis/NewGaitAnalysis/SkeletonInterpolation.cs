@@ -13,42 +13,42 @@ namespace NewGaitAnalysis
         {
             Dictionary<JointType, Joint> interBody = new Dictionary<JointType, Joint>();
 
-            if (IsValidSkeleton(joints1, prevJoints1, nTrackedJointsThreshold, changeInMotionThreshold) && IsValidSkeleton(joints2, prevJoints2, nTrackedJointsThreshold, changeInMotionThreshold))
+            //if (IsValidSkeleton(joints1, prevJoints1, nTrackedJointsThreshold, changeInMotionThreshold) && IsValidSkeleton(joints2, prevJoints2, nTrackedJointsThreshold, changeInMotionThreshold))
+            //{
+            //    foreach (JointType type in Enum.GetValues(typeof(JointType)))
+            //    {
+            //        CameraSpacePoint interPos;
+            //        if (LinearAlgebra.DistanceBetweenTwoPoints(joints1[type].Position, joints2[type].Position) > 0.2)
+            //        {
+            //            if (NumberOfTrackeJoints(joints1) > NumberOfTrackeJoints(joints2))
+            //            {
+            //                interPos = joints1[type].Position;
+            //            }
+            //            else
+            //            {
+            //                interPos = joints2[type].Position;
+            //            }
+            //        }
+            //        else
+            //        {
+            //            interPos = PointInterpolation(joints1[type].Position, joints2[type].Position);
+            //        }
+            //        Joint interJoint = new Joint
+            //        {
+            //            JointType = type,
+            //            TrackingState = TrackingState.Tracked,
+            //            Position = interPos
+            //        };
+            //        interBody.Add(type, interJoint);
+            //    }
+            //}
+            /*else*/ if (IsValidSkeleton(joints2, prevJoints2, nTrackedJointsThreshold, changeInMotionThreshold))
             {
-                foreach (JointType type in Enum.GetValues(typeof(JointType)))
-                {
-                    CameraSpacePoint interPos;
-                    if (LinearAlgebra.DistanceBetweenTwoPoints(joints1[type].Position, joints2[type].Position) > 0.2)
-                    {
-                        if (NumberOfTrackeJoints(joints1) > NumberOfTrackeJoints(joints2))
-                        {
-                            interPos = joints1[type].Position;
-                        }
-                        else
-                        {
-                            interPos = joints2[type].Position;
-                        }
-                    }
-                    else
-                    {
-                        interPos = PointInterpolation(joints1[type].Position, joints2[type].Position);
-                    }
-                    Joint interJoint = new Joint
-                    {
-                        JointType = type,
-                        TrackingState = TrackingState.Tracked,
-                        Position = interPos
-                    };
-                    interBody.Add(type, interJoint);
-                }
+                interBody = joints2;
             }
             else if (IsValidSkeleton(joints1, prevJoints1, nTrackedJointsThreshold, changeInMotionThreshold))
             {
                 interBody = joints1;
-            }
-            else if (IsValidSkeleton(joints2, prevJoints2, nTrackedJointsThreshold, changeInMotionThreshold))
-            {
-                interBody = joints2;
             }
             else
             {
